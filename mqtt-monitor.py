@@ -13,7 +13,7 @@ __copyright__ = "Copyright (C) Dennis Sell"
 
 
 APPNAME = "mqtt-monitor"
-VERSION = "0.10"
+VERSION = "0.11"
 WATCHTOPIC = "/raw/" + APPNAME + "/command"
 
 import os
@@ -33,18 +33,16 @@ class MyMQTTClientCore(MQTTClientCore):
         self.watchtopic = WATCHTOPIC
         self.monitorlist = self.cfg.MONITOR_LIST
         self.interval = self.cfg.INTERVAL
+        self.pause = self.cfg.PAUSE
         self.clientversion = VERSION
         self.response = {}
-        for i in self.monitorlist:
-            self.response[i] = False
 
         self.t = threading.Thread(target=self.do_thread_loop)
-        self.t.start() 
 
     def on_connect(self, mself, obj, rc):
         MQTTClientCore.on_connect(self, mself, obj, rc)
         self.mqttc.subscribe( "/clients" + "/+/ping", 2)
-
+        self.t.start()
 
     def on_message(self, mself, obj, msg):
         MQTTClientCore.on_message(self, mself, obj, msg)
@@ -57,18 +55,18 @@ class MyMQTTClientCore(MQTTClientCore):
                 print "reponse from ", topic[2]
 
     def do_thread_loop(self):
-        if ( self.running ):
+        while ( self.running ):
             if ( self.mqtt_connected ):    
                 for client in self.monitorlist:
                     self.response[client] = False
                     print "Pinging ", client
                     self.mqttc.publish( "/clients/" + client + "/ping", "request", qos=0, retain=0 )
-                time.sleep(10)
-                self.mqttc.publish("/raw/mqtt-monitor/status", "", qos=2, retain=True)
+                time.sleep(self.pause)
+                #self.mqttc.publish("/raw/mqtt-monitor/status", "", qos=2, retain=True)
                 for client in self.monitorlist:
                     if self.response[client] == False:
                         print "No reponse from ", client
-                        self.mqttc.publish( "/raw/mqtt-monitor/status", "Client " + client + " is no longer responding.", qos=2, retain=True )
+                        self.mqttc.publish( "/raw/mqtt-monitor/status", "Client " + client + " is no longer responding.", qos=2, retain=False )
                 if ( self.interval ):
                     print "Waiting ", self.interval, " minutes for next update."
                     time.sleep(self.interval*60)
